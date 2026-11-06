@@ -19,11 +19,14 @@
   --text-tertiary: rgba(60, 60, 67, 0.34);
   --sep: rgba(60, 60, 67, 0.16);
   --tab-bg: rgba(249, 249, 249, 0.92);
+  --tab-solid: #F9F9F9;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
   --nav-h: 52px;
   --tab-h: 56px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Extra pixels below the layout viewport on iOS standalone. JS sets this. */
+  --standalone-gap: 0px;
   --radius: 12px;
   color-scheme: light;
 }
@@ -49,6 +52,7 @@
   --text-tertiary: rgba(235, 235, 245, 0.34);
   --sep: rgba(84, 84, 88, 0.65);
   --tab-bg: rgba(22, 22, 24, 0.94);
+  --tab-solid: #161618;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
 }
@@ -75,6 +79,7 @@
     --text-tertiary: rgba(235, 235, 245, 0.34);
     --sep: rgba(84, 84, 88, 0.65);
     --tab-bg: rgba(22, 22, 24, 0.94);
+    --tab-solid: #161618;
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
     color-scheme: dark;
   }
@@ -82,6 +87,10 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { height: 100%; margin: 0; }
+html { background: var(--tab-solid); }
+@supports (height: 100dvh) {
+  html, body, #app, .app { height: 100dvh; }
+}
 body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
   background: var(--bg);
@@ -95,8 +104,10 @@ img { max-width: 100%; display: block; }
 #app { height: 100%; }
 .app {
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   background: var(--bg-grouped);
 }
 
@@ -111,9 +122,9 @@ img { max-width: 100%; display: block; }
   gap: 8px;
   min-height: calc(var(--nav-h) + var(--safe-top));
   padding: var(--safe-top) 12px 8px;
-  background: color-mix(in srgb, var(--bg) 86%, transparent);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  backdrop-filter: saturate(180%) blur(20px);
+  /* Opaque. backdrop-filter here smears the status bar and "Home Wi-Fi"
+     on iOS standalone (nested blurs + a transformed scroller). */
+  background: var(--bg);
   border-bottom: 0.5px solid var(--sep);
   flex: 0 0 auto;
   z-index: 5;
@@ -135,9 +146,7 @@ img { max-width: 100%; display: block; }
   gap: 6px;
   padding: 5px 10px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--surface) 70%, transparent);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  background: var(--surface);
   font-size: 11px;
   font-weight: 600;
   color: var(--text-secondary);
@@ -183,14 +192,18 @@ img { max-width: 100%; display: block; }
 
 .scroll {
   flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   scroll-behavior: auto;
   padding: 8px 16px calc(var(--tab-h) + var(--safe-bottom) + 76px);
-  transform: translateZ(0);
 }
+/* The sticky week bar must start at the scrollport edge. Top padding would
+   leave a slit where the day underneath shows through, under the navbar. */
+.scroll:has(.cal-top) { padding-top: 0; }
 
 .group { margin: 14px 0 8px; }
 .group-head {
@@ -224,8 +237,6 @@ img { max-width: 100%; display: block; }
   width: 100%;
   text-align: left;
   position: relative;
-  content-visibility: auto;
-  contain-intrinsic-size: 72px;
   background: var(--surface);
 }
 .row + .row { border-top: 0.5px solid var(--sep); }
@@ -236,7 +247,7 @@ img { max-width: 100%; display: block; }
 .swipe-wrap.swiping { background: #E53935; }
 .swipe-wrap:has(.event) { margin: 4px 0; border-radius: 10px; }
 .swipe-wrap > * { width: 100%; display: flex; }
-.swipe-wrap .row { will-change: transform; transform: translate3d(0,0,0); }
+.swipe-wrap.swiping .row { will-change: transform; }
 
 .tabbar {
   position: fixed;
@@ -244,11 +255,24 @@ img { max-width: 100%; display: block; }
   height: calc(var(--tab-h) + var(--safe-bottom));
   padding: 4px 6px var(--safe-bottom);
   display: flex;
-  background: var(--tab-bg);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  backdrop-filter: saturate(180%) blur(20px);
+  background: var(--tab-solid);
   border-top: 0.5px solid var(--sep);
   z-index: 6;
+}
+/* Home Screen only: WebKit's layout viewport can end above the glass
+   (safe-area and/or the status-bar delta). Extend the bar's own background
+   into that strip. The icon row stays on the viewport edge. */
+html.standalone .tabbar {
+  bottom: calc(0px - var(--standalone-gap));
+  height: calc(var(--tab-h) + var(--safe-bottom) + var(--standalone-gap));
+  padding: 4px 6px calc(var(--safe-bottom) + var(--standalone-gap));
+}
+html.standalone .tabbar::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 100%;
+  height: var(--standalone-gap);
+  background: var(--tab-solid);
 }
 .tabbar button {
   flex: 1;
@@ -276,7 +300,6 @@ img { max-width: 100%; display: block; }
   box-shadow: 0 8px 20px color-mix(in srgb, var(--accent-ink) 40%, transparent);
   z-index: 7;
   border: 2px solid var(--accent-stroke);
-  transform: translateZ(0);
 }
 .fab svg { width: 26px; height: 26px; }
 
@@ -516,7 +539,14 @@ img { max-width: 100%; display: block; }
 .lock-screen h1 { font-size: 24px; margin: 0 0 8px; }
 .lock-screen p { color: var(--text-secondary); margin: 0 0 24px; line-height: 1.4; }
 
-.pair-home { padding: 20px 24px calc(40px + var(--safe-bottom)); }
+.pair-home {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 20px 24px calc(40px + var(--safe-bottom));
+}
 .pair-home .hero {
   width: 120px; height: 120px; border-radius: 28px; background: var(--accent-fill);
   color: var(--accent-ink); display: grid; place-items: center; margin: 28px auto 18px;
@@ -568,13 +598,11 @@ img { max-width: 100%; display: block; }
 
 .cal-top {
   position: sticky;
-  top: -8px;
+  top: 0;
   z-index: 2;
   background: var(--bg-grouped);
-  padding: 0 0 4px;
+  padding: 0 16px 4px;
   margin: 0 -16px;
-  padding-left: 16px;
-  padding-right: 16px;
 }
 
-.group { scroll-margin-top: 148px; }
+.group { scroll-margin-top: var(--cal-sticky, 0px); }

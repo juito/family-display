@@ -82,11 +82,23 @@ function render() {
       `<div class="app ${SHOT ? "shot" : ""}">${screenHTML()}${renderMenu(state)}${renderModal(state)}${renderConfirm(state)}${renderPin(state)}</div>`;
     bindAfter();
     loadVisiblePhotos();
-    const selected = document.getElementById("day-" + state.selectedDay);
-    if (selected) selected.scrollIntoView({ block: "start" });
+    revealSelectedDay();
   } catch (err) {
     document.getElementById("app").innerHTML = "<pre style=\"white-space:pre-wrap;padding:16px\">" + (err && err.stack ? err.stack : err) + "</pre>";
   }
+}
+
+function revealSelectedDay() {
+  const selected = document.getElementById("day-" + state.selectedDay);
+  const scroller = selected && selected.closest(".scroll");
+  if (!selected || !scroller) return;
+  const sticky = scroller.querySelector(".cal-top");
+  const stickyH = sticky ? sticky.offsetHeight : 0;
+  const pad = parseFloat(getComputedStyle(scroller).paddingTop) || 0;
+  scroller.style.setProperty("--cal-sticky", (stickyH + pad) + "px");
+  const top = selected.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+  // Sticky top is the scrollport's padding edge, so the day title clears both.
+  scroller.scrollTop = Math.max(0, scroller.scrollTop + top - stickyH - pad);
 }
 
 function bindAfter() {
@@ -149,12 +161,12 @@ function bindSwipes() {
       tracking = false;
       wrap.classList.remove("swiping");
       if (dx < -72) { row.style.transform = ""; askSwipe(wrap.dataset.swipe, wrap.dataset.id); }
-      else row.style.transform = "translate3d(0,0,0)";
+      else row.style.transform = "";
     });
     wrap.addEventListener("touchcancel", () => {
       tracking = false;
       wrap.classList.remove("swiping");
-      row.style.transform = "translate3d(0,0,0)";
+      row.style.transform = "";
     });
   });
 }
@@ -602,8 +614,38 @@ async function doUnlock() {
 if (requested === "lock") { state.needUnlock = true; state.unlocked = false; }
 else if (!SHOT && loadCred() && (state.paired || state.demo)) { state.needUnlock = true; state.unlocked = false; }
 
+syncStandaloneViewport();
+window.addEventListener("resize", syncStandaloneViewport);
+window.addEventListener("orientationchange", syncStandaloneViewport);
+if (window.visualViewport) window.visualViewport.addEventListener("resize", syncStandaloneViewport);
+
 if ("serviceWorker" in navigator && !DEMO) {
+  // Reload only when a new worker replaces one that already controlled the page.
+  // localStorage pairing and the Face ID credential are left untouched.
+  if (navigator.serviceWorker.controller) {
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (window.__fdReloading) return;
+      window.__fdReloading = true;
+      location.reload();
+    });
+  }
   navigator.serviceWorker.register("./sw.js").catch(() => {});
+}
+
+function syncStandaloneViewport() {
+  const root = document.documentElement;
+  const standalone = window.navigator.standalone === true
+    || window.matchMedia("(display-mode: standalone)").matches;
+  root.classList.toggle("standalone", standalone);
+  if (!standalone) {
+    root.style.removeProperty("--standalone-gap");
+    return;
+  }
+  const vv = window.visualViewport;
+  const viewH = vv ? vv.height : window.innerHeight;
+  const offsetTop = vv ? vv.offsetTop : 0;
+  const gap = Math.round(window.screen.height - viewH - offsetTop);
+  root.style.setProperty("--standalone-gap", (gap > 8 ? gap : 0) + "px");
 }
 
 refresh();

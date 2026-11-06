@@ -1,5 +1,5 @@
 /* Family Display PWA: cache the app shell only. API calls and photos stay on the network. */
-const VERSION = "fd-pwa-v1";
+const VERSION = "fd-pwa-v2";
 const SHELL = [
   "./",
   "./index.html",
@@ -19,7 +19,9 @@ const SHELL = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(VERSION).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting())
+    caches.open(VERSION).then((cache) =>
+      cache.addAll(SHELL.map((url) => new Request(url, { cache: "reload" })))
+    ).then(() => self.skipWaiting())
   );
 });
 
